@@ -5,10 +5,10 @@ pipeline {
         DOCKER_IMAGE = "nodejs-api"
         DOCKER_TAG = "${BUILD_NUMBER}"
         SONAR_PROJECT_KEY = "devops-sonatel-project"
-        PATH = "$PATH:/usr/bin"   // <- ajoute cette ligne
     }
 
     stages {
+
         stage('🔍 Checkout') {
             steps {
                 echo '=== Cloning repository ==='
@@ -64,19 +64,21 @@ pipeline {
 
         stage('🔒 Trivy - Scan Image') {
             steps {
-                echo '=== Scanning Docker image ==='
+                echo '=== Scanning Docker image with Trivy ==='
                 sh """
-                    trivy image --severity HIGH,CRITICAL \
-                        --exit-code 0 --format table \
-                        ${DOCKER_IMAGE}:${DOCKER_TAG}
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.68.1 \
+                        image --severity HIGH,CRITICAL --exit-code 0 --format table ${DOCKER_IMAGE}:${DOCKER_TAG}
                 """
             }
         }
 
         stage('🔒 Trivy - Scan K8s') {
             steps {
-                echo '=== Scanning Kubernetes manifests ==='
-                sh 'trivy config k8s/ --severity MEDIUM,HIGH,CRITICAL --exit-code 0'
+                echo '=== Scanning Kubernetes manifests with Trivy ==='
+                sh """
+                    docker run --rm -v \$(pwd)/k8s:/k8s aquasec/trivy:0.68.1 \
+                        config /k8s --severity MEDIUM,HIGH,CRITICAL --exit-code 0
+                """
             }
         }
 
