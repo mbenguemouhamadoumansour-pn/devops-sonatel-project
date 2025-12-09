@@ -63,10 +63,21 @@ pipeline {
             }
         }
 
+        stage('⚙️ Start Minikube') {
+            steps {
+                echo '=== Starting Minikube cluster ==='
+                sh """
+                    export PATH=/usr/local/bin:/usr/bin:/bin
+                    minikube start --driver=docker --memory=4096 --cpus=2
+                """
+            }
+        }
+
         stage('🔒 Trivy - Scan Image') {
             steps {
                 echo '=== Scanning Docker image ==='
                 sh """
+                    export PATH=/usr/local/bin:/usr/bin:/bin
                     trivy image --severity HIGH,CRITICAL --exit-code 0 --format table ${DOCKER_IMAGE}:${DOCKER_TAG}
                 """
             }
@@ -76,6 +87,7 @@ pipeline {
             steps {
                 echo '=== Scanning Kubernetes manifests ==='
                 sh """
+                    export PATH=/usr/local/bin:/usr/bin:/bin
                     trivy config ./k8s --severity MEDIUM,HIGH,CRITICAL --exit-code 0
                 """
             }
@@ -85,6 +97,7 @@ pipeline {
             steps {
                 echo '=== Deploying to Kubernetes ==='
                 sh """
+                    export PATH=/usr/local/bin:/usr/bin:/bin
                     minikube image load ${DOCKER_IMAGE}:${DOCKER_TAG}
                     kubectl apply -f k8s/namespace.yaml
                     kubectl apply -f k8s/deployment.yaml
@@ -98,6 +111,7 @@ pipeline {
             steps {
                 echo '=== Verifying deployment ==='
                 sh """
+                    export PATH=/usr/local/bin:/usr/bin:/bin
                     kubectl get pods -n devops-app
                     kubectl get svc -n devops-app
                 """
