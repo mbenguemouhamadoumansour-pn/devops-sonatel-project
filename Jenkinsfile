@@ -42,7 +42,7 @@ pipeline {
                                 ${scannerHome}/bin/sonar-scanner \
                                   -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
                                   -Dsonar.sources=. \
-                                  -Dsonar.host.url=http://172.17.0.1:9000 \
+                                  -Dsonar.host.url=http://sonarqube:9000 \
                                   -Dsonar.login=$SONAR_TOKEN \
                                   -Dsonar.exclusions=node_modules/**,k8s/**,terraform/**,ansible/**
                             """
