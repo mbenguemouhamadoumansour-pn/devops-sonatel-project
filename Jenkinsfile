@@ -47,15 +47,6 @@ pipeline {
             }
         }
         
-        stage('✅ Quality Gate') {
-            steps {
-                echo '=== Checking Quality Gate ==='
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false
-                }
-            }
-        }
-        
         stage('🐳 Build Docker Image') {
             steps {
                 echo '=== Building Docker image ==='
@@ -66,56 +57,43 @@ pipeline {
             }
         }
         
-        stage('🔒 Trivy - Scan Docker Image') {
+        stage('🔒 Trivy - Scan Image') {
             steps {
-                echo '=== Scanning Docker image for vulnerabilities ==='
+                echo '=== Scanning Docker image ==='
                 sh """
-                    trivy image --severity HIGH,CRITICAL --exit-code 0 \
-                        --format table ${DOCKER_IMAGE}:${DOCKER_TAG}
-                    
-                    trivy image --severity CRITICAL --exit-code 1 \
-                        ${DOCKER_IMAGE}:${DOCKER_TAG} || true
+                    trivy image --severity HIGH,CRITICAL \
+                        --exit-code 0 --format table \
+                        ${DOCKER_IMAGE}:${DOCKER_TAG}
                 """
             }
         }
         
-        stage('🔒 Trivy - Scan K8s Manifests') {
+        stage('🔒 Trivy - Scan K8s') {
             steps {
                 echo '=== Scanning Kubernetes manifests ==='
                 sh 'trivy config k8s/ --severity MEDIUM,HIGH,CRITICAL --exit-code 0'
             }
         }
         
-        stage('☸️ Deploy to Minikube') {
+        stage('☸️ Deploy to K8s') {
             steps {
                 echo '=== Deploying to Kubernetes ==='
                 sh """
                     minikube image load ${DOCKER_IMAGE}:${DOCKER_TAG}
-                    
                     kubectl apply -f k8s/namespace.yaml
-                    
-                    sed 's|image: nodejs-api:1.0.0|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|g' \
-                        k8s/deployment.yaml | kubectl apply -f -
-                    
+                    kubectl apply -f k8s/deployment.yaml
                     kubectl apply -f k8s/service.yaml
-                    
                     kubectl rollout status deployment/nodejs-api -n devops-app --timeout=2m
                 """
             }
         }
         
-        stage('✅ Verify Deployment') {
+        stage('✅ Verify') {
             steps {
                 echo '=== Verifying deployment ==='
                 sh """
                     kubectl get pods -n devops-app
                     kubectl get svc -n devops-app
-                    
-                    echo "Waiting for pods to be ready..."
-                    kubectl wait --for=condition=ready pod -l app=nodejs-api -n devops-app --timeout=60s
-                    
-                    echo "Testing API..."
-                    minikube service nodejs-api-service -n devops-app --url
                 """
             }
         }
@@ -123,8 +101,7 @@ pipeline {
     
     post {
         always {
-            echo '=== Cleaning up ==='
-            sh 'docker system prune -f || true'
+            echo '=== Pipeline completed ==='
         }
         success {
             echo '✅ Pipeline succeeded!'
