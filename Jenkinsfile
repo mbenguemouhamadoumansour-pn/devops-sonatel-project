@@ -5,10 +5,10 @@ pipeline {
         DOCKER_IMAGE = "nodejs-api"
         DOCKER_TAG = "${BUILD_NUMBER}"
         SONAR_PROJECT_KEY = "devops-sonatel-project"
+        PATH = "$PATH:/usr/bin"   // <- ajoute cette ligne
     }
 
     stages {
-
         stage('🔍 Checkout') {
             steps {
                 echo '=== Cloning repository ==='
