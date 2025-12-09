@@ -5,6 +5,8 @@ pipeline {
         DOCKER_IMAGE = "nodejs-api"
         DOCKER_TAG = "${BUILD_NUMBER}"
         SONAR_PROJECT_KEY = "devops-sonatel-project"
+
+        PATH = "/usr/local/bin:/usr/bin:/bin"
     }
 
     stages {
@@ -64,20 +66,20 @@ pipeline {
 
         stage('🔒 Trivy - Scan Image') {
             steps {
-                echo '=== Scanning Docker image with Trivy ==='
+                echo '=== Scanning Docker image ==='
                 sh """
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.68.1 \
-                        image --severity HIGH,CRITICAL --exit-code 0 --format table ${DOCKER_IMAGE}:${DOCKER_TAG}
+                    export PATH=/usr/local/bin:/usr/bin:/bin
+                    trivy image --severity HIGH,CRITICAL --exit-code 0 --format table ${DOCKER_IMAGE}:${DOCKER_TAG}
                 """
             }
         }
 
         stage('🔒 Trivy - Scan K8s') {
             steps {
-                echo '=== Scanning Kubernetes manifests with Trivy ==='
+                echo '=== Scanning Kubernetes manifests ==='
                 sh """
-                    docker run --rm -v \$(pwd)/k8s:/k8s aquasec/trivy:0.68.1 \
-                        config /k8s --severity MEDIUM,HIGH,CRITICAL --exit-code 0
+                    export PATH=/usr/local/bin:/usr/bin:/bin
+                    trivy config ./k8s --severity MEDIUM,HIGH,CRITICAL --exit-code 0
                 """
             }
         }
@@ -86,6 +88,7 @@ pipeline {
             steps {
                 echo '=== Deploying to Kubernetes ==='
                 sh """
+                    export PATH=/usr/local/bin:/usr/bin:/bin
                     minikube image load ${DOCKER_IMAGE}:${DOCKER_TAG}
                     kubectl apply -f k8s/namespace.yaml
                     kubectl apply -f k8s/deployment.yaml
