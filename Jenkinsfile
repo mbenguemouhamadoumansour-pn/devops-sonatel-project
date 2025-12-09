@@ -29,23 +29,19 @@ pipeline {
             }
         }
         
-        stage('📊 SonarQube Analysis') {
-            steps {
-                echo '=== Running SonarQube analysis ==='
-                script {
-                    def scannerHome = tool 'SonarScanner'
-                    withSonarQubeEnv('SonarQube') {
-                        sh """
-                            ${scannerHome}/bin/sonar-scanner \
-                              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                              -Dsonar.sources=. \
-                              -Dsonar.host.url=http://sonarqube:9000 \
-                              -Dsonar.exclusions=node_modules/**,k8s/**,terraform/**,ansible/**
-                        """
-                    }
-                }
-            }
-        }
+	withSonarQubeEnv('SonarQube') {
+    withCredentials([string(credentialsId: 'sonar-token', variable: 'sonar-token')]) {
+        sh """
+            ${scannerHome}/bin/sonar-scanner \
+              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+              -Dsonar.sources=. \
+              -Dsonar.host.url=http://sonarqube:9001 \
+              -Dsonar.login=$SONAR_TOKEN \
+              -Dsonar.exclusions=node_modules/**,k8s/**,terraform/**,ansible/**
+        """
+    }
+}
+
         
         stage('🐳 Build Docker Image') {
             steps {
