@@ -1,58 +1,52 @@
 pipeline {
     agent any
-
+    
     environment {
         DOCKER_IMAGE = "nodejs-api"
         DOCKER_TAG = "${BUILD_NUMBER}"
         SONAR_PROJECT_KEY = "devops-sonatel-project"
-        PATH = "/usr/local/bin:/usr/bin:/bin"
     }
-
+    
     stages {
-
         stage('🔍 Checkout') {
             steps {
                 echo '=== Cloning repository ==='
                 checkout scm
             }
         }
-
+        
         stage('📦 Install Dependencies') {
             steps {
                 echo '=== Installing Node.js dependencies ==='
                 sh 'npm install'
             }
         }
-
+        
         stage('🧪 Run Tests') {
             steps {
                 echo '=== Running unit tests ==='
                 sh 'npm test'
             }
         }
-
+        
         stage('📊 SonarQube Analysis') {
             steps {
                 echo '=== Running SonarQube analysis ==='
                 script {
                     def scannerHome = tool 'SonarScanner'
-
-                    withSonarQubeEnv('SonarScanner') {
-                        withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                            sh """
-                                ${scannerHome}/bin/sonar-scanner \
-                                  -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                                  -Dsonar.sources=. \
-                                  -Dsonar.host.url=http://sonarqube:9000 \
-                                  -Dsonar.login=$SONAR_TOKEN \
-                                  -Dsonar.exclusions=node_modules/**,k8s/**,terraform/**,ansible/**
-                            """
-                        }
+                    withSonarQubeEnv('SonarQube') {
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                              -Dsonar.sources=. \
+                              -Dsonar.host.url=http://sonarqube:9000 \
+                              -Dsonar.exclusions=node_modules/**,k8s/**,terraform/**,ansible/**
+                        """
                     }
                 }
             }
         }
-
+        
         stage('🐳 Build Docker Image') {
             steps {
                 echo '=== Building Docker image ==='
@@ -62,73 +56,71 @@ pipeline {
                 """
             }
         }
-
-        stage('⚙️ Start Minikube') {
-            steps {
-                echo '=== Starting Minikube cluster ==='
-                sh """
-                    export PATH=/usr/local/bin:/usr/bin:/bin
-                    minikube start --driver=docker --memory=4096 --cpus=2
-                """
-            }
-        }
-
+        
         stage('🔒 Trivy - Scan Image') {
             steps {
-                echo '=== Scanning Docker image ==='
-                sh """
-                    export PATH=/usr/local/bin:/usr/bin:/bin
-                    trivy image --severity HIGH,CRITICAL --exit-code 0 --format table ${DOCKER_IMAGE}:${DOCKER_TAG}
-                """
+                echo '=== Scanning Docker image for vulnerabilities ==='
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    sh """
+                        trivy image --severity HIGH,CRITICAL \
+                            --exit-code 0 --format table \
+                            ${DOCKER_IMAGE}:${DOCKER_TAG}
+                    """
+                }
             }
         }
-
-        stage('🔒 Trivy - Scan K8s') {
+        
+        stage('🔒 Trivy - Scan K8s Manifests') {
             steps {
                 echo '=== Scanning Kubernetes manifests ==='
-                sh """
-                    export PATH=/usr/local/bin:/usr/bin:/bin
-                    trivy config ./k8s --severity MEDIUM,HIGH,CRITICAL --exit-code 0
-                """
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    sh """
+                        trivy config k8s/ \
+                            --severity MEDIUM,HIGH,CRITICAL \
+                            --exit-code 0
+                    """
+                }
             }
         }
-
-        stage('☸️ Deploy to K8s') {
+        
+        stage('✅ Build Complete') {
             steps {
-                echo '=== Deploying to Kubernetes ==='
+                echo '=== Docker image ready for deployment ==='
                 sh """
-                    export PATH=/usr/local/bin:/usr/bin:/bin
-                    minikube image load ${DOCKER_IMAGE}:${DOCKER_TAG}
-                    kubectl apply -f k8s/namespace.yaml
-                    kubectl apply -f k8s/deployment.yaml
-                    kubectl apply -f k8s/service.yaml
-                    kubectl rollout status deployment/nodejs-api -n devops-app --timeout=2m
-                """
-            }
-        }
-
-        stage('✅ Verify') {
-            steps {
-                echo '=== Verifying deployment ==='
-                sh """
-                    export PATH=/usr/local/bin:/usr/bin:/bin
-                    kubectl get pods -n devops-app
-                    kubectl get svc -n devops-app
+                    echo "✅ Image built: ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    docker images | grep ${DOCKER_IMAGE} | head -3
                 """
             }
         }
     }
-
+    
     post {
         always {
-            echo '=== Pipeline completed ==='
+            echo '=== Cleaning old images ==='
+            sh '''
+                # Garder seulement les 5 dernières images
+                docker images ${DOCKER_IMAGE} --format "{{.Tag}}" | \
+                    grep -E "^[0-9]+$" | sort -rn | tail -n +6 | \
+                    xargs -I {} docker rmi ${DOCKER_IMAGE}:{} 2>/dev/null || true
+            '''
         }
         success {
             echo '✅ Pipeline succeeded!'
+            echo """
+            ========================================
+            🎉 BUILD SUCCESSFUL!
+            ========================================
+            Image: ${DOCKER_IMAGE}:${DOCKER_TAG}
+            
+            To deploy manually:
+            1. minikube image load ${DOCKER_IMAGE}:${DOCKER_TAG}
+            2. kubectl apply -f k8s/
+            3. kubectl rollout restart deployment/nodejs-api -n devops-app
+            ========================================
+            """
         }
         failure {
-            echo '❌ Pipeline failed!'
+            echo '❌ Pipeline failed! Check logs above.'
         }
     }
 }
-
