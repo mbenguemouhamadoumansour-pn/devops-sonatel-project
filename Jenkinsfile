@@ -39,7 +39,7 @@ pipeline {
                     // OPTION 2: Utiliser le bon nom (décommentez si configuré)
                     /*
                     def scannerHome = tool 'SonarScanner'
-                    withSonarQubeEnv('NOM_EXACT_DU_SERVEUR') {
+                    withSonarQubeEnv('SonarScanner') {
                         sh """
                             ${scannerHome}/bin/sonar-scanner \
                               -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
