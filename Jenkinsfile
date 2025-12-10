@@ -33,8 +33,13 @@ pipeline {
             steps {
                 echo '=== Running SonarQube analysis ==='
                 script {
+                    // OPTION 1: Désactiver temporairement SonarQube
+                    echo 'SonarQube analysis skipped - configure in Jenkins first'
+                    
+                    // OPTION 2: Utiliser le bon nom (décommentez si configuré)
+                    /*
                     def scannerHome = tool 'SonarScanner'
-                    withSonarQubeEnv('SonarQube') {
+                    withSonarQubeEnv('NOM_EXACT_DU_SERVEUR') {
                         sh """
                             ${scannerHome}/bin/sonar-scanner \
                               -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
@@ -43,6 +48,7 @@ pipeline {
                               -Dsonar.exclusions=node_modules/**,k8s/**,terraform/**,ansible/**
                         """
                     }
+                    */
                 }
             }
         }
@@ -98,7 +104,6 @@ pipeline {
         always {
             echo '=== Cleaning old images ==='
             sh '''
-                # Garder seulement les 5 dernières images
                 docker images ${DOCKER_IMAGE} --format "{{.Tag}}" | \
                     grep -E "^[0-9]+$" | sort -rn | tail -n +6 | \
                     xargs -I {} docker rmi ${DOCKER_IMAGE}:{} 2>/dev/null || true
@@ -114,8 +119,8 @@ pipeline {
             
             To deploy manually:
             1. minikube image load ${DOCKER_IMAGE}:${DOCKER_TAG}
-            2. kubectl apply -f k8s/
-            3. kubectl rollout restart deployment/nodejs-api -n devops-app
+            2. kubectl set image deployment/nodejs-api nodejs-api=${DOCKER_IMAGE}:${DOCKER_TAG} -n devops-app
+            3. kubectl rollout status deployment/nodejs-api -n devops-app
             ========================================
             """
         }
