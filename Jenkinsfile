@@ -33,22 +33,16 @@ pipeline {
             steps {
                 echo '=== Running SonarQube analysis ==='
                 script {
-                    // OPTION 1: Désactiver temporairement SonarQube
-                    echo 'SonarQube analysis skipped - configure in Jenkins first'
-                    
-                    // OPTION 2: Utiliser le bon nom (décommentez si configuré)
-                    /*
                     def scannerHome = tool 'SonarScanner'
-                    withSonarQubeEnv('SonarScanner') {
+                    withSonarQubeEnv('SonarQube') {
                         sh """
                             ${scannerHome}/bin/sonar-scanner \
                               -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
                               -Dsonar.sources=. \
                               -Dsonar.host.url=http://sonarqube:9000 \
-                              -Dsonar.exclusions=node_modules/**,k8s/**,terraform/**,ansible/**
+                              -Dsonar.exclusions=node_modules/**,k8s/**
                         """
                     }
-                    */
                 }
             }
         }
@@ -65,7 +59,7 @@ pipeline {
         
         stage('🔒 Trivy - Scan Image') {
             steps {
-                echo '=== Scanning Docker image for vulnerabilities ==='
+                echo '=== Scanning Docker image ==='
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     sh """
                         trivy image --severity HIGH,CRITICAL \
@@ -76,7 +70,7 @@ pipeline {
             }
         }
         
-        stage('🔒 Trivy - Scan K8s Manifests') {
+        stage('🔒 Trivy - Scan K8s') {
             steps {
                 echo '=== Scanning Kubernetes manifests ==='
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
@@ -91,9 +85,9 @@ pipeline {
         
         stage('✅ Build Complete') {
             steps {
-                echo '=== Docker image ready for deployment ==='
+                echo '=== Docker image ready ==='
                 sh """
-                    echo "✅ Image built: ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    echo "✅ Image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
                     docker images | grep ${DOCKER_IMAGE} | head -3
                 """
             }
@@ -117,15 +111,15 @@ pipeline {
             ========================================
             Image: ${DOCKER_IMAGE}:${DOCKER_TAG}
             
-            To deploy manually:
+            To deploy:
             1. minikube image load ${DOCKER_IMAGE}:${DOCKER_TAG}
-            2. kubectl set image deployment/nodejs-api nodejs-api=${DOCKER_IMAGE}:${DOCKER_TAG} -n devops-app
-            3. kubectl rollout status deployment/nodejs-api -n devops-app
+            2. kubectl set image deployment/nodejs-api \\
+               nodejs-api=${DOCKER_IMAGE}:${DOCKER_TAG} -n devops-app
             ========================================
             """
         }
         failure {
-            echo '❌ Pipeline failed! Check logs above.'
+            echo '❌ Pipeline failed!'
         }
     }
 }
